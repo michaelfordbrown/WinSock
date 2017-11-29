@@ -11,6 +11,17 @@ Winsock follows the Windows Open System Architecture (WOSA) model; it defines a 
 #include <WinSock2.h>
 #include <iostream>
 
+SOCKET Connection;
+
+void ClientThread()
+{
+	char buffer[256];
+	while (true)
+	{
+		recv(Connection, buffer, sizeof(buffer), NULL);
+		std::cout << buffer << std::endl;
+	}
+}
 
 int main()
 {
@@ -62,7 +73,7 @@ int main()
 	// The socket function creates a socket that is bound to a specific transport service provider.
 	//		AF_INET - The Internet Protocol version 4 (IPv4) address family.
 	//		SOCK_STREAM - A socket type that provides sequenced, reliable, two-way, connection-based byte streams with an OOB data transmission mechanism. This socket type uses the Transmission Control Protocol (TCP) for the Internet address family (AF_INET or AF_INET6).
-	SOCKET Connection = socket(AF_INET, SOCK_STREAM, NULL);
+	Connection = socket(AF_INET, SOCK_STREAM, NULL);
 
 	if (connect(Connection, (SOCKADDR*)&addr, sizeofaddr) != 0)
 	{
@@ -70,11 +81,24 @@ int main()
 	}
 
 	std::cout << "connected!" << std::endl;
-	CHAR MOTD[256];
+
+
+	//Creates a thread to execute within the virtual address space of the calling process.
+	CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)ClientThread, NULL, NULL, NULL);
+
+	/*CHAR MOTD[256];
 
 	// The recv function receives data from a connected socket or a bound connectionless socket.
 	recv(Connection, MOTD, sizeof(MOTD), NULL);
 	std::cout << "MOTD:\t" << MOTD << std::endl;
+	*/
+	char buffer[256];
+	while (true)
+	{
+		std::cin.getline(buffer, sizeof(buffer));
+		send(Connection, buffer, sizeof(buffer), NULL);
+		Sleep(10);
+	}
 
 	system("pause");
 	return 0;

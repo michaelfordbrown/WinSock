@@ -13,6 +13,23 @@ Winsock follows the Windows Open System Architecture (WOSA) model; it defines a 
 #include <WinSock2.h>
 #include <iostream>
 
+SOCKET Connections[100];
+int ConnectionCounter = 0;
+
+void ClientHandlerThread(int index)
+{
+	char buffer[256];
+	while (true)
+	{
+		recv(Connections[index], buffer, sizeof(buffer), NULL);
+		for (int i = 0; i < ConnectionCounter; i++)
+		{
+			if (i == index)
+				continue;
+			send(Connections[i], buffer, sizeof(buffer), NULL);
+		}
+	}
+}
 
 int main()
 {
@@ -76,23 +93,32 @@ int main()
 
 	SOCKET newConnection;
 
-	// The accept function permits an incoming connection attempt on a socket.
-	newConnection = accept(sListen, (SOCKADDR*)&addr, &addrlen);
-	if (newConnection == 0)
+	for (int i = 0; i < 100; i++)
 	{
-		WSAError =  WSAGetLastError();
-		LPCSTR  ErrorMessage = "WinSock Incoming Connection Failure. Error code: " + WSAError;
-		MessageBoxA(NULL, ErrorMessage, "Error", MB_OK | MB_ICONERROR);
-	}
-	else
-	{
-		std::cout << "Client Connected!" << std::endl;
-		char MOTD[256] = "Welcome! This is the Message of the Day.";
+			// The accept function permits an incoming connection attempt on a socket.
+			newConnection = accept(sListen, (SOCKADDR*)&addr, &addrlen);
+			if (newConnection == 0)
+			{
+				WSAError = WSAGetLastError();
+				LPCSTR  ErrorMessage = "WinSock Incoming Connection Failure. Error code: " + WSAError;
+				MessageBoxA(NULL, ErrorMessage, "Error", MB_OK | MB_ICONERROR);
+			}
+			else
+			{
+				std::cout << "Client Connected!" << std::endl;
+				char MOTD[256] = "Welcome! This is the Message of the Day.";
 
-		// The send function sends data on a connected socket.
-		send(newConnection, MOTD, sizeof(MOTD), NULL);
+				// The send function sends data on a connected socket.
+				send(newConnection, MOTD, sizeof(MOTD), NULL);
+
+				// Handle multiple clients
+				Connections[i] = newConnection;
+				ConnectionCounter++;
+
+				//Creates a thread to execute within the virtual address space of the calling process.
+				CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)ClientHandlerThread, (LPVOID)(i), NULL, NULL);
+			}
 	}
-	
 	system("pause");
 	return 0;
 }
