@@ -9,17 +9,23 @@ Winsock follows the Windows Open System Architecture (WOSA) model; it defines a 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include <WinSock2.h>
+#include <string>
 #include <iostream>
 
 SOCKET Connection;
 
 void ClientThread()
 {
-	char buffer[256];
+	int bufferlength = 0;
 	while (true)
 	{
-		recv(Connection, buffer, sizeof(buffer), NULL);
-		std::cout << buffer << std::endl;
+		recv(Connection, (char*)&bufferlength, sizeof(bufferlength), NULL); // receive buffer length
+		char * buffer = new char[bufferlength + 1]; // allocate buffer
+		buffer[bufferlength] = '\0'; //Set last character ti NULL terminator 
+		recv(Connection, buffer, bufferlength, NULL); //Receive message from server
+		std::cout << "\nClient Sink buffer = " << buffer << " of length " << bufferlength << std::endl;
+
+		delete[] buffer; //Deallocate buffer
 	}
 }
 
@@ -92,11 +98,23 @@ int main()
 	recv(Connection, MOTD, sizeof(MOTD), NULL);
 	std::cout << "MOTD:\t" << MOTD << std::endl;
 	*/
-	char buffer[256];
+	 // Fixed Size String
+	// char buffer[256];
+
+	std::string buffer; // string buffer to send message
 	while (true)
 	{
-		std::cin.getline(buffer, sizeof(buffer));
-		send(Connection, buffer, sizeof(buffer), NULL);
+		// Fixed Size String
+		//std::cin.getline(buffer, sizeof(buffer));
+
+		std::getline(std::cin, buffer); //Get line if user presses enter and fill buffer
+		int bufferlength = buffer.size();
+
+		std::cout << "\nClient Source buffer = " << buffer << " of length " << bufferlength << std::endl;
+		
+		send(Connection, (char*)&bufferlength, sizeof(bufferlength), NULL); // Send length of buffer
+		send(Connection, buffer.c_str(), bufferlength, NULL); //Send buffer string
+
 		Sleep(10);
 	}
 

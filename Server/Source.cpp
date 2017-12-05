@@ -18,16 +18,27 @@ int ConnectionCounter = 0;
 
 void ClientHandlerThread(int index)
 {
-	char buffer[256];
+	// Fixed Size Buffer
+	//char buffer[256];
+	
+	int bufferlength = 0; // Holds the length of the buffer
+		
 	while (true)
 	{
-		recv(Connections[index], buffer, sizeof(buffer), NULL);
+		recv(Connections[index], (char*)&bufferlength, sizeof(bufferlength), NULL); // Get length of incoming message (buffer).
+
+		char * buffer = new char[bufferlength]; // Create dynamic character array
+		recv(Connections[index],buffer, bufferlength, NULL);
+
 		for (int i = 0; i < ConnectionCounter; i++)
 		{
 			if (i == index)
 				continue;
-			send(Connections[i], buffer, sizeof(buffer), NULL);
+			send(Connections[i], (char*)&bufferlength, sizeof(bufferlength), NULL); // Send length of buffer
+			send(Connections[i], buffer, bufferlength, NULL);// send the char message to other clients
 		}
+
+		delete[] buffer;
 	}
 }
 
@@ -106,10 +117,13 @@ int main()
 			else
 			{
 				std::cout << "Client Connected!" << std::endl;
-				char MOTD[256] = "Welcome! This is the Message of the Day.";
+				std::string MOTD = "Welcome! This is the Message of the Day.";
+				int MOTDLength = MOTD.size();
 
+				send(newConnection, (char*)&MOTDLength, sizeof(MOTDLength), NULL);
+				
 				// The send function sends data on a connected socket.
-				send(newConnection, MOTD, sizeof(MOTD), NULL);
+				send(newConnection, MOTD.c_str(), MOTDLength, NULL);
 
 				// Handle multiple clients
 				Connections[i] = newConnection;
