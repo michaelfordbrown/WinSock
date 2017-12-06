@@ -16,30 +16,65 @@ Winsock follows the Windows Open System Architecture (WOSA) model; it defines a 
 SOCKET Connections[100];
 int ConnectionCounter = 0;
 
-void ClientHandlerThread(int index)
+enum Packet
 {
-	// Fixed Size Buffer
-	//char buffer[256];
-	
-	int bufferlength = 0; // Holds the length of the buffer
-		
-	while (true)
+	P_ChatMessage,
+	P_Test
+};
+
+bool ProcessPacket(int ID, Packet packettype)
+{
+	switch (packettype)
 	{
-		recv(Connections[index], (char*)&bufferlength, sizeof(bufferlength), NULL); // Get length of incoming message (buffer).
+	case P_ChatMessage:
+	{
+		int bufferlength = 0; // Holds the length of the buffer
+
+		recv(Connections[ID], (char*)&bufferlength, sizeof(bufferlength), NULL); // Get length of incoming message (buffer).
 
 		char * buffer = new char[bufferlength]; // Create dynamic character array
-		recv(Connections[index],buffer, bufferlength, NULL);
+		recv(Connections[ID], buffer, bufferlength, NULL);
 
 		for (int i = 0; i < ConnectionCounter; i++)
 		{
-			if (i == index)
+			if (i == ID)
 				continue;
+
+			Packet chatmessagepacket = P_ChatMessage;
+			send(Connections[i], (char*)&chatmessagepacket, sizeof(chatmessagepacket), NULL);
+
 			send(Connections[i], (char*)&bufferlength, sizeof(bufferlength), NULL); // Send length of buffer
 			send(Connections[i], buffer, bufferlength, NULL);// send the char message to other clients
 		}
 
 		delete[] buffer;
+		break;
 	}
+	default:
+	{
+		std::cout << __LINE__ << " Unrecognized Packet: " << packettype << std::endl;
+		break;
+	}
+	}
+	return true;
+}
+
+
+
+
+void ClientHandlerThread(int ID)
+{
+	Packet packettype;
+
+	while (true)
+	{
+		recv(Connections[ID], (char*)&packettype, sizeof(packettype), NULL);
+
+		if (!ProcessPacket(ID, packettype))
+			break;
+	}
+	closesocket(Connections[ID]);
+
 }
 
 int main()
@@ -116,14 +151,20 @@ int main()
 			}
 			else
 			{
-				std::cout << "Client Connected!" << std::endl;
+				std::cout <<  __LINE__ << " Client Connected!" << std::endl;
 				std::string MOTD = "Welcome! This is the Message of the Day.";
 				int MOTDLength = MOTD.size();
+
+				Packet chatmessagepacket = P_ChatMessage;
+				send(newConnection, (char*)&chatmessagepacket, sizeof(chatmessagepacket), NULL);
 
 				send(newConnection, (char*)&MOTDLength, sizeof(MOTDLength), NULL);
 				
 				// The send function sends data on a connected socket.
 				send(newConnection, MOTD.c_str(), MOTDLength, NULL);
+
+				Packet testpacket = P_Test;
+				send(newConnection, (char*)&testpacket, sizeof(testpacket), NULL);
 
 				// Handle multiple clients
 				Connections[i] = newConnection;

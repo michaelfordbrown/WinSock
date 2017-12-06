@@ -14,19 +14,58 @@ Winsock follows the Windows Open System Architecture (WOSA) model; it defines a 
 
 SOCKET Connection;
 
-void ClientThread()
+
+enum Packet
 {
-	int bufferlength = 0;
-	while (true)
+	P_ChatMessage,
+	P_Test
+};
+
+bool ProcessPacket(Packet packettype)
+{
+	switch (packettype)
 	{
+	case P_ChatMessage:
+	{
+		int bufferlength = 0;
 		recv(Connection, (char*)&bufferlength, sizeof(bufferlength), NULL); // receive buffer length
 		char * buffer = new char[bufferlength + 1]; // allocate buffer
 		buffer[bufferlength] = '\0'; //Set last character ti NULL terminator 
 		recv(Connection, buffer, bufferlength, NULL); //Receive message from server
-		std::cout << "\nClient Sink buffer = " << buffer << " of length " << bufferlength << std::endl;
-
+		std::cout << "\n" << __LINE__ << " Client Sink buffer = " << buffer << " of length " << bufferlength << std::endl;
 		delete[] buffer; //Deallocate buffer
+		break;
 	}
+	case P_Test:
+	{
+		std::cout << "You have received a Test packet\n";
+		break;
+	}
+	default:
+	{
+		std::cout << __LINE__ << " Unrecognized Packet: " << packettype << std::endl;
+		break;
+	}
+	}
+	return true;
+}
+
+void ClientThread()
+{
+	Packet packettype;
+	while (true)
+	{
+		recv(Connection, (char*)&packettype, sizeof(packettype), NULL); // receive packet type
+		
+		std::cout << __LINE__ << " Packet: " << packettype << std::endl;
+
+		if (!ProcessPacket(packettype)) // If the packet is not properly processed
+		{
+			break; // break out of client handler loop
+		}
+
+	}
+	closesocket(Connection); //close the socket that was being used for the client's connection
 }
 
 int main()
@@ -110,8 +149,11 @@ int main()
 		std::getline(std::cin, buffer); //Get line if user presses enter and fill buffer
 		int bufferlength = buffer.size();
 
-		std::cout << "\nClient Source buffer = " << buffer << " of length " << bufferlength << std::endl;
-		
+		std::cout << __LINE__ << " Client Source buffer = " << buffer << " of length " << bufferlength << std::endl;
+
+		Packet chatmessagepacket = P_ChatMessage;
+		send(Connection, (char*)&chatmessagepacket, sizeof(chatmessagepacket), NULL);
+
 		send(Connection, (char*)&bufferlength, sizeof(bufferlength), NULL); // Send length of buffer
 		send(Connection, buffer.c_str(), bufferlength, NULL); //Send buffer string
 
