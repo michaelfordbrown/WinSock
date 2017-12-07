@@ -14,12 +14,95 @@ Winsock follows the Windows Open System Architecture (WOSA) model; it defines a 
 
 SOCKET Connection;
 
-
 enum Packet
 {
 	P_ChatMessage,
 	P_Test
 };
+
+bool SendInt(int _int)
+{
+	int RetnCheck = send(Connection, (char*)&_int, sizeof(_int), NULL);
+	if (RetnCheck == SOCKET_ERROR)
+		return false;
+	return true;
+}
+
+bool GetInt(int & _int)
+{
+	int RetnCheck = recv(Connection, (char*)& _int, sizeof(_int), NULL);
+	if (RetnCheck == SOCKET_ERROR)
+		return false;
+	return true;
+}
+
+bool SendPacketType(Packet _packettype)
+{
+	std::cout << __LINE__ << "Send PacketType\n";
+
+	int RetnCheck = send(Connection, (char*)&_packettype, sizeof(_packettype), NULL);
+	if (RetnCheck == SOCKET_ERROR)
+		return false;
+	return true;
+}
+
+bool GetPacketType(Packet & _packettype)
+{
+	int RetnCheck = recv(Connection, (char*)& _packettype, sizeof(_packettype), NULL);
+	if (RetnCheck == SOCKET_ERROR)
+		return false;
+	return true;
+}
+
+bool SendString(std::string & _string)
+{
+	std::cout << __LINE__ <<  "Send String\n";
+
+	if (!SendPacketType(P_ChatMessage))
+		return false;
+
+	std::cout << __LINE__ << " Packet Type Sent\n";
+
+	int bufferlength = _string.size();
+	if (!SendInt(bufferlength))
+		return false;
+
+	std::cout << __LINE__ << " Buffer Length Sent\n";
+	
+	int RetnCheck = send(Connection, _string.c_str(), bufferlength, NULL);
+	if (RetnCheck == SOCKET_ERROR)
+		return false;
+
+	std::cout << __LINE__ << " String Sent\n";
+
+	return true;
+}
+
+bool GetString(std::string & _string)
+{
+	std::cout << __LINE__ << " GetString\n";
+	int bufferlength;
+	if (!GetInt(bufferlength))
+		return false;
+
+	std::cout << __LINE__ << " GetString: bufferlength>  " << bufferlength << "\n";
+
+	char * buffer = new char[bufferlength + 1];
+	buffer[bufferlength] = '\0';
+
+	std::cout << __LINE__ << " GetString\n";
+
+	int RetnCheck = recv(Connection, buffer, bufferlength, NULL);
+	_string = buffer;
+	delete[] buffer;
+
+	if (RetnCheck == SOCKET_ERROR)
+	{
+		std::cout << __LINE__ << " GetString\n";
+		return false;
+	}
+	return true;
+}
 
 bool ProcessPacket(Packet packettype)
 {
@@ -27,18 +110,10 @@ bool ProcessPacket(Packet packettype)
 	{
 	case P_ChatMessage:
 	{
-		int bufferlength = 0;
-		recv(Connection, (char*)&bufferlength, sizeof(bufferlength), NULL); // receive buffer length
-		char * buffer = new char[bufferlength + 1]; // allocate buffer
-		buffer[bufferlength] = '\0'; //Set last character ti NULL terminator 
-		recv(Connection, buffer, bufferlength, NULL); //Receive message from server
-		std::cout << "\n" << __LINE__ << " Client Sink buffer = " << buffer << " of length " << bufferlength << std::endl;
-		delete[] buffer; //Deallocate buffer
-		break;
-	}
-	case P_Test:
-	{
-		std::cout << "You have received a Test packet\n";
+		std::string Message;
+		if (!GetString(Message))
+			return false;
+		std::cout << "\n" << __LINE__ << " Client Sink buffer = " << Message << " of length " << Message.size() << std::endl;
 		break;
 	}
 	default:
@@ -55,7 +130,8 @@ void ClientThread()
 	Packet packettype;
 	while (true)
 	{
-		recv(Connection, (char*)&packettype, sizeof(packettype), NULL); // receive packet type
+		if (!GetPacketType(packettype)) // receive packet type
+			break;
 		
 		std::cout << __LINE__ << " Packet: " << packettype << std::endl;
 
@@ -65,6 +141,7 @@ void ClientThread()
 		}
 
 	}
+	std::cout << __LINE__ << " Lost connection to the server. " << std::endl;
 	closesocket(Connection); //close the socket that was being used for the client's connection
 }
 
@@ -127,36 +204,16 @@ int main()
 
 	std::cout << "connected!" << std::endl;
 
-
 	//Creates a thread to execute within the virtual address space of the calling process.
 	CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)ClientThread, NULL, NULL, NULL);
 
-	/*CHAR MOTD[256];
-
-	// The recv function receives data from a connected socket or a bound connectionless socket.
-	recv(Connection, MOTD, sizeof(MOTD), NULL);
-	std::cout << "MOTD:\t" << MOTD << std::endl;
-	*/
-	 // Fixed Size String
-	// char buffer[256];
-
-	std::string buffer; // string buffer to send message
+	std::string userinput; // string buffer to send message
 	while (true)
-	{
-		// Fixed Size String
-		//std::cin.getline(buffer, sizeof(buffer));
-
-		std::getline(std::cin, buffer); //Get line if user presses enter and fill buffer
-		int bufferlength = buffer.size();
-
-		std::cout << __LINE__ << " Client Source buffer = " << buffer << " of length " << bufferlength << std::endl;
-
-		Packet chatmessagepacket = P_ChatMessage;
-		send(Connection, (char*)&chatmessagepacket, sizeof(chatmessagepacket), NULL);
-
-		send(Connection, (char*)&bufferlength, sizeof(bufferlength), NULL); // Send length of buffer
-		send(Connection, buffer.c_str(), bufferlength, NULL); //Send buffer string
-
+	{		
+		std::getline(std::cin, userinput); //Get line if user presses enter and fill buffer
+		std::cout << __LINE__ << " user input: " << userinput.c_str() << std::endl;
+		if (!SendString(userinput))
+			break;
 		Sleep(10);
 	}
 

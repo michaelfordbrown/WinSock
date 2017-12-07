@@ -22,32 +22,112 @@ enum Packet
 	P_Test
 };
 
+bool SendInt(int ID, int _int)
+{
+	int RetnCheck = send(Connections[ID], (char*)&_int, sizeof(_int), NULL);
+	if (RetnCheck == SOCKET_ERROR)
+		return false;
+	return true;
+}
+
+bool GetInt(int ID, int & _int)
+{
+	int RetnCheck = recv(Connections[ID], (char*)& _int, sizeof(_int), NULL);
+	if (RetnCheck == SOCKET_ERROR)
+		return false;
+	return true;
+}
+
+bool SendPacketType(int ID, Packet _packettype)
+{
+	std::cout << __LINE__ << "Send PacketType\n";
+
+	int RetnCheck = send(Connections[ID], (char*)&_packettype, sizeof(_packettype), NULL);
+	if (RetnCheck == SOCKET_ERROR)
+		return false;
+	return true;
+}
+
+bool GetPacketType(int ID, Packet & _packettype)
+{
+	int RetnCheck = recv(Connections[ID], (char*)& _packettype, sizeof(_packettype), NULL);
+	if (RetnCheck == SOCKET_ERROR)
+		return false;
+	return true;
+}
+
+bool SendString(int ID, std::string & _string)
+{
+	std::cout << __LINE__ << "Send String\n";
+
+	if (!SendPacketType(ID, P_ChatMessage))
+		return false;
+
+	std::cout << __LINE__ << " Packet Type Sent\n";
+
+	int bufferlength = _string.size();
+	if (!SendInt(ID, bufferlength))
+		return false;
+
+	std::cout << __LINE__ << " Buffer Length Sent\n";
+
+	int RetnCheck = send(Connections[ID], _string.c_str(), bufferlength, NULL);
+	if (RetnCheck == SOCKET_ERROR)
+		return false;
+
+	std::cout << __LINE__ << " String Sent\n";
+
+	return true;
+}
+
+bool GetString(int ID, std::string & _string)
+{
+	std::cout << __LINE__ << "GetString\n";
+	int bufferlength;
+	if (!GetInt(ID, bufferlength))
+		return false;
+
+	std::cout << __LINE__ << "GetString\n";
+	char * buffer = new char[bufferlength + 1];
+	buffer[bufferlength] = '\0';
+
+	std::cout << __LINE__ << "GetString\n";
+	int RetnCheck = recv(Connections[ID], buffer, bufferlength, NULL);
+	_string = buffer;
+	delete[] buffer;
+
+	if (RetnCheck == SOCKET_ERROR)
+	{
+		std::cout << __LINE__ << "GetString\n";
+		return false;
+	}
+	return true;
+}
+
+
 bool ProcessPacket(int ID, Packet packettype)
 {
 	switch (packettype)
 	{
 	case P_ChatMessage:
 	{
-		int bufferlength = 0; // Holds the length of the buffer
-
-		recv(Connections[ID], (char*)&bufferlength, sizeof(bufferlength), NULL); // Get length of incoming message (buffer).
-
-		char * buffer = new char[bufferlength]; // Create dynamic character array
-		recv(Connections[ID], buffer, bufferlength, NULL);
+		std::string Message;
+		if (!GetString(ID, Message))
+			return false;
+		std::cout << "\n" << __LINE__ << " Client " << ID << " buffer = " << Message.c_str() << " of length " << Message.size() << std::endl;
 
 		for (int i = 0; i < ConnectionCounter; i++)
 		{
 			if (i == ID)
 				continue;
 
-			Packet chatmessagepacket = P_ChatMessage;
-			send(Connections[i], (char*)&chatmessagepacket, sizeof(chatmessagepacket), NULL);
-
-			send(Connections[i], (char*)&bufferlength, sizeof(bufferlength), NULL); // Send length of buffer
-			send(Connections[i], buffer, bufferlength, NULL);// send the char message to other clients
+			if (!SendString(i, Message))
+			{
+				std::cout << "Failed to send message from client ID: " << ID << " to client ID: " << i << std::endl;
+				return false;
+			}
 		}
-
-		delete[] buffer;
+		std::cout << "Processed chat message packet from client ID: " << ID << std::endl;
 		break;
 	}
 	default:
@@ -68,11 +148,13 @@ void ClientHandlerThread(int ID)
 
 	while (true)
 	{
-		recv(Connections[ID], (char*)&packettype, sizeof(packettype), NULL);
+		if (!GetPacketType(ID, packettype)) // receive packet type
+			break;
 
 		if (!ProcessPacket(ID, packettype))
 			break;
 	}
+	std::cout << __LINE__ << " Lost connection to the client number " << ID << ". " << std::endl;
 	closesocket(Connections[ID]);
 
 }
@@ -152,19 +234,6 @@ int main()
 			else
 			{
 				std::cout <<  __LINE__ << " Client Connected!" << std::endl;
-				std::string MOTD = "Welcome! This is the Message of the Day.";
-				int MOTDLength = MOTD.size();
-
-				Packet chatmessagepacket = P_ChatMessage;
-				send(newConnection, (char*)&chatmessagepacket, sizeof(chatmessagepacket), NULL);
-
-				send(newConnection, (char*)&MOTDLength, sizeof(MOTDLength), NULL);
-				
-				// The send function sends data on a connected socket.
-				send(newConnection, MOTD.c_str(), MOTDLength, NULL);
-
-				Packet testpacket = P_Test;
-				send(newConnection, (char*)&testpacket, sizeof(testpacket), NULL);
 
 				// Handle multiple clients
 				Connections[i] = newConnection;
@@ -172,6 +241,9 @@ int main()
 
 				//Creates a thread to execute within the virtual address space of the calling process.
 				CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)ClientHandlerThread, (LPVOID)(i), NULL, NULL);
+
+				std::string MOTD = "Welcome! This is the Message of the Day.";
+				SendString(i, MOTD);
 			}
 	}
 	system("pause");
